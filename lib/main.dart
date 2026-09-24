@@ -1,19 +1,29 @@
 import 'package:flutter/material.dart';
 import 'screens/register_screen.dart';
-import 'services/notification_service.dart'; // 1. Добавили импорт
+// Подключи здесь свой главный экран (название файла может отличаться, проверь его)
+import 'screens/settings_screen.dart';
+import 'services/notification_service.dart';
+import 'services/auth_service.dart'; // Подключаем наш новый сервис памяти
 
-void main() async { // 2. Добавили слово async
-  // 3. Обязательная строка для работы с системой до запуска runApp
+void main() async {
+  // Обязательная строка для работы с системой до запуска runApp
   WidgetsFlutterBinding.ensureInitialized(); 
   
-  // 4. Запускаем наш сервис уведомлений
+  // Запускаем наш сервис уведомлений
   await NotificationService.instance.init(); 
 
-  runApp(const DiaxApp());
+  // ПРОВЕРКА ПАМЯТИ: узнаем, регистрировался ли человек ранее
+  bool isLogged = await AuthService.isLoggedIn();
+
+  // Запускаем приложение и передаем ему результат проверки
+  runApp(DiaxApp(isLogged: isLogged));
 }
 
 class DiaxApp extends StatelessWidget {
-  const DiaxApp({super.key});
+  final bool isLogged; // Создаем переменную для хранения статуса
+
+  // Требуем передать статус при запуске DiaxApp
+  const DiaxApp({super.key, required this.isLogged});
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +34,10 @@ class DiaxApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
       ),
-      home: const RegisterScreen(),
+      // УМНЫЙ ЗАПУСК: 
+      // Если isLogged == true, показываем MainScreen()
+      // Если isLogged == false, показываем RegisterScreen()
+      home: isLogged ? const SettingsScreen() : const RegisterScreen(),
     );
   }
 }

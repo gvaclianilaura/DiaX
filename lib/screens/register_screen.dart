@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../db/database_helper.dart';
+import '../services/auth_service.dart';
 import 'settings_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -18,6 +19,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
   bool _isLoading = false;
+  
+  // НОВАЯ ПЕРЕМЕННАЯ: Режим входа (true) или регистрации (false)
+  bool _isLoginMode = false; 
 
   @override
   void dispose() {
@@ -27,7 +31,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  Future<void> _register() async {
+  // Общий метод для Входа и Регистрации
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
@@ -35,23 +40,36 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final login = _loginController.text.trim();
     final password = _passwordController.text;
 
-    final ok = await DatabaseHelper.instance.registerUser(login, password);
+    bool ok = false;
+
+    // Проверяем, какой сейчас режим
+    if (_isLoginMode) {
+      // ПЫТАЕМСЯ ВОЙТИ
+      // ВНИМАНИЕ: Убедись, что в DatabaseHelper есть метод loginUser (проверка логина и пароля)
+      // Если его пока нет, я напишу его тебе в следующем сообщении!
+      ok = await DatabaseHelper.instance.checkUser(login, password);
+    } else {
+      // РЕГИСТРИРУЕМСЯ
+      ok = await DatabaseHelper.instance.registerUser(login, password);
+    }
 
     if (!mounted) return;
     setState(() => _isLoading = false);
 
     if (ok) {
+      await AuthService.login(); // Запоминаем статус
+      
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Регистрация успешна!')),
-      );
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+        SnackBar(content: Text(_isLoginMode ? 'Вход выполнен!' : 'Регистрация успешна!')),
       );
       
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const SettingsScreen()),
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Такой логин уже существует')),
+        SnackBar(content: Text(_isLoginMode ? 'Неверный логин или пароль' : 'Такой логин уже существует')),
       );
     }
   }
@@ -59,7 +77,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Регистрация')),
+      appBar: AppBar(
+        title: Text(_isLoginMode ? 'Вход' : 'Регистрация'),
+      ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -77,12 +97,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       border: OutlineInputBorder(),
                     ),
                     validator: (v) {
-                      if (v == null || v.trim().isEmpty) {
-                        return 'Введите логин';
-                      }
-                      if (v.trim().length < 3) {
-                        return 'Логин не короче 3 символов';
-                      }
+                      if (v == null || v.trim().isEmpty) return 'Введите логин';
+                      if (v.trim().length < 3) return 'Логин не короче 3 символов';
                       return null;
                     },
                   ),
@@ -96,11 +112,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       labelText: 'Пароль',
                       border: const OutlineInputBorder(),
                       suffixIcon: IconButton(
-                        icon: Icon(_obscurePassword
-                            ? Icons.visibility_off
-                            : Icons.visibility),
-                        onPressed: () => setState(
-                            () => _obscurePassword = !_obscurePassword),
+                        icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                       ),
                     ),
                     validator: (v) {
@@ -111,46 +124,60 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Повтор пароля (необязательный)
-                  TextFormField(
-                    controller: _confirmController,
-                    obscureText: _obscureConfirm,
-                    decoration: InputDecoration(
-                      labelText: 'Повторите пароль',
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        icon: Icon(_obscureConfirm
-                            ? Icons.visibility_off
-                            : Icons.visibility),
-                        onPressed: () => setState(
-                            () => _obscureConfirm = !_obscureConfirm),
+                  // Повтор пароля (ПОКАЗЫВАЕМ ТОЛЬКО ПРИ РЕГИСТРАЦИИ)
+                  if (!_isLoginMode) 
+                    TextFormField(
+                      controller: _confirmController,
+                      obscureText: _obscureConfirm,
+                      decoration: InputDecoration(
+                        labelText: 'Повторите пароль',
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          icon: Icon(_obscureConfirm ? Icons.visibility_off : Icons.visibility),
+                          onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                        ),
                       ),
+                      validator: (v) {
+                        if (v == null || v.isEmpty) return null;
+                        if (v != _passwordController.text) return 'Пароли не совпадают';
+                        return null;
+                      },
                     ),
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return null; // необязательное
-                      if (v != _passwordController.text) {
-                        return 'Пароли не совпадают';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 24),
+                  
+                  if (!_isLoginMode) const SizedBox(height: 24),
+                  if (_isLoginMode) const SizedBox(height: 8),
 
-                  // Кнопка
+                  // Главная Кнопка
                   SizedBox(
                     width: double.infinity,
                     height: 48,
                     child: ElevatedButton(
-                      onPressed: _isLoading ? null : _register,
+                      onPressed: _isLoading ? null : _submit,
                       child: _isLoading
                           ? const SizedBox(
-                              width: 22,
-                              height: 22,
+                              width: 22, height: 22,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Text('Зарегистрироваться'),
+                          : Text(_isLoginMode ? 'Войти' : 'Зарегистрироваться'),
                     ),
                   ),
+
+                  const SizedBox(height: 16),
+
+                  // КНОПКА ПЕРЕКЛЮЧЕНИЯ РЕЖИМОВ (Вход <-> Регистрация)
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _isLoginMode = !_isLoginMode; // Переключаем режим
+                        _formKey.currentState?.reset(); // Сбрасываем ошибки ввода
+                      });
+                    },
+                    child: Text(
+                      _isLoginMode 
+                        ? 'Нет аккаунта? Зарегистрироваться' 
+                        : 'Уже есть аккаунт? Войти'
+                    ),
+                  )
                 ],
               ),
             ),
