@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../db/database_helper.dart';
+import 'settings_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -43,8 +44,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Регистрация успешна!')),
       );
-      // Здесь потом можно сделать переход на экран входа:
-      // Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+      );
+      
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Такой логин уже существует')),
@@ -112,7 +116,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     controller: _confirmController,
                     obscureText: _obscureConfirm,
                     decoration: InputDecoration(
-                      labelText: 'Повторите пароль (необязательно)',
+                      labelText: 'Повторите пароль',
                       border: const OutlineInputBorder(),
                       suffixIcon: IconButton(
                         icon: Icon(_obscureConfirm

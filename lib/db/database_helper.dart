@@ -35,6 +35,17 @@ class DatabaseHelper {
         created_at TEXT NOT NULL
       )
     ''');
+
+    // Таблица настроек.
+    // unit: 0 - ммоль/л, 1 - мг/дл
+    await db.execute('''
+      CREATE TABLE settings (
+        user_id INTEGER PRIMARY KEY,
+        unit INTEGER DEFAULT 0,
+        snack_time TEXT DEFAULT '14:00',
+        measure_time TEXT DEFAULT '08:00'
+      )
+    ''');
   }
 
   /// Регистрация. Возвращает false, если логин уже занят.
@@ -73,5 +84,38 @@ class DatabaseHelper {
   Future<List<Map<String, dynamic>>> getAllUsers() async {
     final db = await database;
     return db.query('users');
+  }
+
+  // --- МЕТОДЫ ДЛЯ НАСТРОЕК ---
+
+  /// Сохранить или обновить настройки
+  Future<void> saveSettings(int userId, int unit, String snackTime, String measureTime) async {
+    final db = await database;
+    await db.insert(
+      'settings',
+      {
+        'user_id': userId,
+        'unit': unit,
+        'snack_time': snackTime,
+        'measure_time': measureTime,
+      },
+      // Перезаписываем настройки, если они уже есть для этого пользователя
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Получить настройки пользователя по его ID
+  Future<Map<String, dynamic>?> getSettings(int userId) async {
+    final db = await database;
+    final result = await db.query(
+      'settings',
+      where: 'user_id = ?',
+      whereArgs: [userId],
+    );
+    
+    if (result.isNotEmpty) {
+      return result.first;
+    }
+    return null;
   }
 }
