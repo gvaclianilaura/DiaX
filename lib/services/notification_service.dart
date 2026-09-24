@@ -1,37 +1,32 @@
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/data/latest.dart' as tz;
-import 'package:timezone/timezone.dart' as tz;
-import 'package:flutter_timezone/flutter_timezone.dart'; // Подключили новую библиотеку
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/material.dart';
 
 class NotificationService {
   static final NotificationService instance = NotificationService._internal();
   NotificationService._internal();
 
-  final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
-
   Future<void> init() async {
-    // 1. Инициализируем базу времени
-    tz.initializeTimeZones();
-    
-    // 2. Узнаем текущий часовой пояс телефона и применяем его
-    final String currentTimeZone = await FlutterTimezone.getLocalTimezone();
-    tz.setLocalLocation(tz.getLocation(currentTimeZone));
+    await AwesomeNotifications().initialize(
+      null, // Автоматически подхватит иконку приложения
+      [
+        NotificationChannel(
+          channelKey: 'diax_alerts',
+          channelName: 'Напоминания DiaX',
+          channelDescription: 'Уведомления о перекусах и измерениях',
+          defaultColor: const Color(0xFF9D50DD),
+          ledColor: Colors.white,
+          importance: NotificationImportance.Max,
+          channelShowBadge: true,
+          criticalAlerts: true, // Помогает пробить беззвучный режим
+        )
+      ],
+    );
 
-    // 3. Возвращаем правильную иконку (обязательно с @mipmap)
-    const AndroidInitializationSettings androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const InitializationSettings initSettings = InitializationSettings(android: androidSettings);
-
-    await _notificationsPlugin.initialize(settings: initSettings);
-
-    // Запрашиваем права
-    await _notificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
-        
-    await _notificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestExactAlarmsPermission();
+    // Запрашиваем права максимально надежным способом
+    bool isAllowed = await AwesomeNotifications().isNotificationAllowed();
+    if (!isAllowed) {
+      await AwesomeNotifications().requestPermissionToSendNotifications();
+    }
   }
 
   Future<void> scheduleDailyNotification({
@@ -40,48 +35,39 @@ class NotificationService {
     required String body,
     required TimeOfDay time,
   }) async {
-    final now = tz.TZDateTime.now(tz.local);
-    var scheduledDate = tz.TZDateTime(tz.local, now.year, now.month, now.day, time.hour, time.minute);
+    final now = DateTime.now();
+    var scheduleTime = DateTime(now.year, now.month, now.day, time.hour, time.minute);
 
-    // Если время сегодня прошло, ставим на завтра
-    if (scheduledDate.isBefore(now)) {
-      scheduledDate = scheduledDate.add(const Duration(days: 1));
+    if (scheduleTime.isBefore(now)) {
+      scheduleTime = scheduleTime.add(const Duration(days: 1));
     }
 
-    const androidDetails = AndroidNotificationDetails(
-      'diax_reminders',
-      'Напоминания',
-      channelDescription: 'Уведомления о перекусах и измерениях',
-      importance: Importance.max,
-      priority: Priority.high,
-    );
-
-    const notificationDetails = NotificationDetails(android: androidDetails);
-
-    await _notificationsPlugin.zonedSchedule(
-      id: id,
-      title: title,
-      body: body,
-      scheduledDate: scheduledDate,
-      notificationDetails: notificationDetails,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      matchDateTimeComponents: DateTimeComponents.time,
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: id,
+        channelKey: 'diax_alerts',
+        title: title,
+        body: body,
+        wakeUpScreen: true, // Принудительно включит экран телефона
+        category: NotificationCategory.Reminder,
+      ),
+      schedule: NotificationCalendar.fromDate(
+        date: scheduleTime,
+        allowWhileIdle: true, // Игнорировать энергосбережение
+        preciseAlarm: true,   // Игнорировать оптимизацию времени
+      ),
     );
   }
 
-  // Наш мгновенный тест
   Future<void> showInstantNotification() async {
-    const androidDetails = AndroidNotificationDetails(
-      'diax_instant',
-      'Тестовые уведомления',
-      importance: Importance.max,
-      priority: Priority.high,
-    );
-    await _notificationsPlugin.show(
-      999,
-      'Проверка связи!',
-      'Если ты это видишь, значит всё работает.',
-      const NotificationDetails(android: androidDetails),
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: 999,
+        channelKey: 'diax_alerts',
+        title: 'Проверка связи!',
+        body: 'Awesome Notifications успешно пробил защиту!',
+        wakeUpScreen: true,
+      ),
     );
   }
 }
