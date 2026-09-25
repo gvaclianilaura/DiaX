@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'screens/register_screen.dart';
-// Подключи здесь свой главный экран (название файла может отличаться, проверь его)
 import 'screens/settings_screen.dart';
 import 'services/notification_service.dart';
-import 'services/auth_service.dart'; // Подключаем наш новый сервис памяти
+import 'services/auth_service.dart'; 
 
 void main() async {
   // Обязательная строка для работы с системой до запуска runApp

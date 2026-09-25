@@ -20,7 +20,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscureConfirm = true;
   bool _isLoading = false;
   
-  // НОВАЯ ПЕРЕМЕННАЯ: Режим входа (true) или регистрации (false)
+  // Режим входа (true) или регистрации (false)
   bool _isLoginMode = false; 
 
   @override
@@ -45,8 +45,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     // Проверяем, какой сейчас режим
     if (_isLoginMode) {
       // ПЫТАЕМСЯ ВОЙТИ
-      // ВНИМАНИЕ: Убедись, что в DatabaseHelper есть метод loginUser (проверка логина и пароля)
-      // Если его пока нет, я напишу его тебе в следующем сообщении!
       ok = await DatabaseHelper.instance.checkUser(login, password);
     } else {
       // РЕГИСТРИРУЕМСЯ
