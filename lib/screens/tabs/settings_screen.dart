@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:diax/db/database_helper.dart';
+import 'package:diax/widgets/reminder_list.dart';
+
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -12,17 +15,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // Единица измерения: 'mmol' (ммоль/л) или 'mgdl' (мг/дл)
   String _glucoseUnit = 'mmol';
 
+  // ID текущего пользователя (получаем из SharedPreferences)
+  int _userId = 1;
+
   @override
   void initState() {
     super.initState();
     _loadSettings();
   }
 
-  // Загрузка настроек из shared_preferences
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
+    final savedUnit = prefs.getString('glucose_unit') ?? 'mmol';
+    final savedUserId = prefs.getInt('user_id') ?? 1;
+
+    if (!mounted) return;
     setState(() {
-      _glucoseUnit = prefs.getString('glucose_unit') ?? 'mmol';
+      _glucoseUnit = savedUnit;
+      _userId = savedUserId;
     });
   }
 
@@ -31,8 +41,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _glucoseUnit = newUnit;
     });
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('glucose_unit', newUnit);
+
+    // Также сохраняем в таблицу settings
+    try {
+      final unitInt = newUnit == 'mmol' ? 0 : 1;
+      await DatabaseHelper.instance.saveSettings(
+        _userId,
+        unitInt,
+        '14:00',
+        '08:00',
+      );
+    } catch (e) {
+      // Игнорируем — таблица settings может быть ещё не заполнена
+      debugPrint('Ошибка сохранения настроек в БД: $e');
+    }
   }
 
   @override
@@ -42,7 +67,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // === БЛОК: ЕДИНИЦА ИЗМЕРЕНИЯ ГЛЮКОЗЫ ===
+          // ==================== БЛОК: ЕДИНИЦА ИЗМЕРЕНИЯ ====================
           Card(
             elevation: 0,
             shape: RoundedRectangleBorder(
@@ -68,11 +93,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-
-                  // === ПОЛЗУНОК ===
                   Row(
                     children: [
-                      // Левая подпись — ммоль/л
                       Text(
                         'ммоль/л',
                         style: TextStyle(
@@ -93,12 +115,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           divisions: 1,
                           activeColor: Colors.blueAccent,
                           onChanged: (value) {
-                            final newUnit = value == 0 ? 'mmol' : 'mgdl';
-                            _changeGlucoseUnit(newUnit);
+                            _changeGlucoseUnit(value == 0 ? 'mmol' : 'mgdl');
                           },
                         ),
                       ),
-                      // Правая подпись — мг/дл
                       Text(
                         'мг/дл',
                         style: TextStyle(
@@ -113,14 +133,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ],
                   ),
-
-                  const SizedBox(height: 8),
-
-                  // Пояснение под ползунком
+                  const SizedBox(height: 4),
                   Text(
                     _glucoseUnit == 'mmol'
-                        ? 'Сейчас выбрано: миллимоль на литр (ммоль/л)'
-                        : 'Сейчас выбрано: миллиграмм на децилитр (мг/дл)',
+                        ? 'Сейчас выбрано: ммоль/л'
+                        : 'Сейчас выбрано: мг/дл',
                     style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
                   ),
                 ],
@@ -128,10 +145,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
 
-          // === МЕСТО ДЛЯ ДРУГИХ НАСТРОЕК ===
-          // Сюда позже можно добавить другие пункты настроек
+          // ==================== ЗАГОЛОВОК: НАПОМИНАНИЯ ====================
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 8),
+            child: Row(
+              children: const [
+                Icon(Icons.notifications_active, color: Colors.blueAccent),
+                SizedBox(width: 8),
+                Text(
+                  'Напоминания',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+
+          // ==================== НАПОМИНАНИЯ ОБ ИЗМЕРЕНИИ ====================
+          ReminderList(
+            userId: _userId,
+            type: 'measure',
+            title: 'Измерение сахара',
+            icon: Icons.water_drop,
+            color: Colors.redAccent,
+            body: 'Пора измерить уровень сахара в крови',
+          ),
+
+          const SizedBox(height: 12),
+
+          // ==================== НАПОМИНАНИЯ О ПЕРЕКУСАХ ====================
+          ReminderList(
+            userId: _userId,
+            type: 'snack',
+            title: 'Перекусы',
+            icon: Icons.apple,
+            color: Colors.green,
+            body: 'Время перекусить',
+          ),
+
+          const SizedBox(height: 12),
+
+          // ==================== НАПОМИНАНИЯ О ПРИЁМАХ ПИЩИ ====================
         ],
       ),
     );

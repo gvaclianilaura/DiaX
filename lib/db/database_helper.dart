@@ -21,14 +21,15 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 2, // <-- БЫЛО 1, СТАЛО 2
+      version: 3, // <-- версия 3: users, settings, meal_entries, reminders
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
   }
 
+  // ==================== СОЗДАНИЕ ТАБЛИЦ ====================
   Future<void> _onCreate(Database db, int version) async {
-    // === Таблица пользователей ===
+    // Таблица пользователей
     await db.execute('''
       CREATE TABLE users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,7 +39,7 @@ class DatabaseHelper {
       )
     ''');
 
-    // === Таблица настроек ===
+    // Таблица настроек
     // unit: 0 - ммоль/л, 1 - мг/дл
     await db.execute('''
       CREATE TABLE settings (
@@ -49,7 +50,7 @@ class DatabaseHelper {
       )
     ''');
 
-    // === НОВАЯ Таблица записей о приёмах пищи ===
+    // Таблица записей о приёмах пищи
     await db.execute('''
       CREATE TABLE meal_entries (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,10 +63,21 @@ class DatabaseHelper {
         UNIQUE(date, meal_name)
       )
     ''');
+
+    // Таблица напоминаний
+    // type: 'measure' — измерение сахара, 'snack' — перекус, 'meal' — еда
+    await db.execute('''
+      CREATE TABLE reminders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        type TEXT NOT NULL,
+        time TEXT NOT NULL,
+        enabled INTEGER DEFAULT 1
+      )
+    ''');
   }
 
-  // Вызывается, когда у пользователя уже есть БД старой версии.
-  // Добавляем только новые таблицы, не трогая существующие.
+  // ==================== ОБНОВЛЕНИЕ СТАРЫХ БД ====================
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await db.execute('''
@@ -78,6 +90,17 @@ class DatabaseHelper {
           insulin REAL,
           note TEXT DEFAULT '',
           UNIQUE(date, meal_name)
+        )
+      ''');
+    }
+    if (oldVersion < 3) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS reminders (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          type TEXT NOT NULL,
+          time TEXT NOT NULL,
+          enabled INTEGER DEFAULT 1
         )
       ''');
     }
@@ -213,6 +236,82 @@ class DatabaseHelper {
       'meal_entries',
       where: 'date = ? AND meal_name = ?',
       whereArgs: [date, mealName],
+    );
+  }
+
+  // ==================== НАПОМИНАНИЯ ====================
+
+  /// Добавить напоминание. Возвращает ID созданной записи.
+  Future<int> addReminder(int userId, String type, String time) async {
+    final db = await database;
+    return await db.insert('reminders', {
+      'user_id': userId,
+      'type': type,
+      'time': time,
+      'enabled': 1,
+    });
+  }
+
+  /// Получить все напоминания пользователя определённого типа
+  Future<List<Map<String, dynamic>>> getReminders(
+    int userId,
+    String type,
+  ) async {
+    final db = await database;
+    return db.query(
+      'reminders',
+      where: 'user_id = ? AND type = ?',
+      whereArgs: [userId, type],
+      orderBy: 'time ASC',
+    );
+  }
+
+  /// Получить ВСЕ напоминания пользователя (без фильтра по типу)
+  Future<List<Map<String, dynamic>>> getAllReminders(int userId) async {
+    final db = await database;
+    return db.query(
+      'reminders',
+      where: 'user_id = ?',
+      whereArgs: [userId],
+      orderBy: 'time ASC',
+    );
+  }
+
+  /// Обновить время напоминания
+  Future<void> updateReminder(int id, String newTime) async {
+    final db = await database;
+    await db.update(
+      'reminders',
+      {'time': newTime},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// Включить / выключить напоминание
+  Future<void> setReminderEnabled(int id, bool enabled) async {
+    final db = await database;
+    await db.update(
+      'reminders',
+      {'enabled': enabled ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// Удалить напоминание
+  Future<void> deleteReminder(int id) async {
+    final db = await database;
+    await db.delete('reminders', where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Удалить все напоминания пользователя определённого типа
+  Future<void> deleteAllReminders(int userId, String type) async {
+    final db = await database;
+    await db.delete(
+      'reminders',
+      where: 'user_id = ? AND type = ?',
+      whereArgs: [userId, type],
     );
   }
 }

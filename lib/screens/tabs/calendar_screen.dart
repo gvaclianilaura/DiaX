@@ -14,7 +14,6 @@ class CalendarScreen extends StatefulWidget {
 }
 
 class _CalendarScreenState extends State<CalendarScreen> {
-  DateTime _today = DateTime.now();
   DateTime _selectedDay = DateTime.now();
   DateTime _focusedDay = DateTime.now();
 
@@ -26,7 +25,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
   final TextEditingController _insulinController = TextEditingController();
   final TextEditingController _noteController = TextEditingController();
 
-  // Приёмы пищи, по которым есть запись на выбранную дату
   Set<String> _filledKeys = {};
 
   @override
@@ -62,7 +60,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
       appBar: AppBar(title: const Text('Календарь'), centerTitle: true),
       body: Column(
         children: [
-          // ============== КАЛЕНДАРЬ ==============
+          // ============================================================
+          // ВЕРХНЯЯ ЧАСТЬ: КАЛЕНДАРЬ
+          // ============================================================
           Container(
             height: screenHeight * 0.42,
             decoration: BoxDecoration(
@@ -70,63 +70,76 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 bottom: BorderSide(color: Colors.grey.shade300, width: 1),
               ),
             ),
-            child: TableCalendar(
-              locale: 'ru_RU',
-              headerStyle: const HeaderStyle(
-                formatButtonVisible: false,
-                titleCentered: true,
-                titleTextStyle: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              daysOfWeekStyle: const DaysOfWeekStyle(
-                weekdayStyle: TextStyle(fontWeight: FontWeight.w600),
-                weekendStyle: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: Colors.redAccent,
-                ),
-              ),
-              calendarStyle: CalendarStyle(
-                todayDecoration: BoxDecoration(
-                  color: Colors.blueAccent.withOpacity(0.5),
-                  shape: BoxShape.circle,
-                ),
-                todayTextStyle: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-                selectedDecoration: const BoxDecoration(
-                  color: Colors.blueAccent,
-                  shape: BoxShape.circle,
-                ),
-                weekendTextStyle: const TextStyle(color: Colors.redAccent),
-                outsideDaysVisible: false,
-              ),
-              startingDayOfWeek: StartingDayOfWeek.monday,
-              firstDay: DateTime.utc(2020, 1, 1),
-              lastDay: DateTime.utc(2030, 12, 31),
-              selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-              focusedDay: _focusedDay,
-              onDaySelected: (selectedDay, focusedDay) {
-                setState(() {
-                  _selectedDay = selectedDay;
-                  _focusedDay = focusedDay;
-                });
-                _loadFilledKeys();
-              },
-              onPageChanged: (focusedDay) {
-                setState(() {
-                  _focusedDay = focusedDay;
-                });
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return TableCalendar(
+                  locale: 'ru_RU',
+                  // === Фиксированная высота строки календаря ===
+                  // (высота контейнера − высота шапки) / 6 строк
+                  rowHeight: (constraints.maxHeight - 90) / 6,
+
+                  headerStyle: const HeaderStyle(
+                    formatButtonVisible: false,
+                    titleCentered: true,
+                    titleTextStyle: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  daysOfWeekStyle: const DaysOfWeekStyle(
+                    weekdayStyle: TextStyle(fontWeight: FontWeight.w600),
+                    weekendStyle: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Colors.redAccent,
+                    ),
+                  ),
+                  calendarStyle: CalendarStyle(
+                    cellMargin: const EdgeInsets.all(4),
+                    cellPadding: EdgeInsets.zero,
+                    todayDecoration: BoxDecoration(
+                      color: Colors.blueAccent.withOpacity(0.5),
+                      shape: BoxShape.circle,
+                    ),
+                    todayTextStyle: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    selectedDecoration: const BoxDecoration(
+                      color: Colors.blueAccent,
+                      shape: BoxShape.circle,
+                    ),
+                    weekendTextStyle: const TextStyle(color: Colors.redAccent),
+                    outsideDaysVisible: false,
+                    defaultTextStyle: const TextStyle(fontSize: 14),
+                  ),
+                  startingDayOfWeek: StartingDayOfWeek.monday,
+                  firstDay: DateTime.utc(2020, 1, 1),
+                  lastDay: DateTime.utc(2030, 12, 31),
+                  selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+                  focusedDay: _focusedDay,
+                  onDaySelected: (selectedDay, focusedDay) {
+                    setState(() {
+                      _selectedDay = selectedDay;
+                      _focusedDay = focusedDay;
+                    });
+                    _loadFilledKeys();
+                  },
+                  onPageChanged: (focusedDay) {
+                    setState(() {
+                      _focusedDay = focusedDay;
+                    });
+                  },
+                );
               },
             ),
           ),
 
-          // ============== КНОПКИ / ФОРМА ==============
-          Expanded(
+          // ============================================================
+          // НИЖНЯЯ ЧАСТЬ: КНОПКИ / ФОРМА
+          // ============================================================
+          Flexible(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -138,14 +151,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       isFilled: _filledKeys.contains('Завтрак'),
                       onTap: () => _openMealForm('Завтрак'),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     _SnackButton(
                       label: 'Перекус',
                       icon: Icons.apple,
                       isFilled: _filledKeys.contains('Перекус после завтрака'),
                       onTap: () => _openMealForm('Перекус после завтрака'),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
                     _MainMealButton(
                       label: 'Обед',
                       icon: Icons.lunch_dining,
@@ -153,14 +166,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       isFilled: _filledKeys.contains('Обед'),
                       onTap: () => _openMealForm('Обед'),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     _SnackButton(
                       label: 'Перекус',
                       icon: Icons.cookie,
                       isFilled: _filledKeys.contains('Перекус после обеда'),
                       onTap: () => _openMealForm('Перекус после обеда'),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
                     _MainMealButton(
                       label: 'Ужин',
                       icon: Icons.dinner_dining,
@@ -168,7 +181,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       isFilled: _filledKeys.contains('Ужин'),
                       onTap: () => _openMealForm('Ужин'),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     _SnackButton(
                       label: 'Перекус',
                       icon: Icons.local_cafe,
@@ -187,7 +200,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
   }
 
-  // === Открыть форму и загрузить существующую запись ===
+  // ============================================================
+  // ОТКРЫТИЕ ФОРМЫ И ЗАГРУЗКА СУЩЕСТВУЮЩЕЙ ЗАПИСИ
+  // ============================================================
   Future<void> _openMealForm(String mealName) async {
     final prefs = await SharedPreferences.getInstance();
     final savedUnit = prefs.getString('glucose_unit') ?? 'mmol';
@@ -216,7 +231,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
     });
   }
 
-  // === Сохранить в БД ===
+  // ============================================================
+  // СОХРАНЕНИЕ В БД
+  // ============================================================
   Future<void> _saveMealEntry() async {
     final mealName = _selectedMeal;
     if (mealName == null) return;
@@ -250,7 +267,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         content: Text(
           entry.isEmpty
               ? 'Запись удалена'
-              : 'Сохранено в БД: $mealName\n'
+              : 'Сохранено: $mealName\n'
                     'Глюкоза: ${_glucoseController.text} '
                     '${_glucoseUnit == 'mmol' ? 'ммоль/л' : 'мг/дл'}\n'
                     'ХЕ: ${_breadUnitsController.text}\n'
@@ -269,6 +286,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return double.tryParse(text.replaceAll(',', '.'));
   }
 
+  // ============================================================
+  // ФОРМА ВВОДА
+  // ============================================================
   Widget _buildMealForm() {
     final unitLabel = _glucoseUnit == 'mmol' ? 'ммоль/л' : 'мг/дл';
 
@@ -302,6 +322,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           ),
           const SizedBox(height: 8),
 
+          // Строка 1: Глюкоза
           _buildFormRow(
             icon: Icons.water_drop,
             iconColor: Colors.redAccent,
@@ -324,6 +345,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           ),
           const SizedBox(height: 10),
 
+          // Строка 2: Хлебные единицы
           _buildFormRow(
             icon: Icons.bakery_dining,
             iconColor: Colors.brown,
@@ -346,6 +368,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           ),
           const SizedBox(height: 10),
 
+          // Строка 3: Инсулин
           _buildFormRow(
             icon: Icons.vaccines,
             iconColor: Colors.blue,
@@ -368,6 +391,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           ),
           const SizedBox(height: 10),
 
+          // Строка 4: Заметки
           _buildFormRow(
             icon: Icons.edit_note,
             iconColor: Colors.blueGrey,
@@ -444,6 +468,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
 }
 
 // ============================================================
+// ВИДЖЕТ: Основная кнопка приёма пищи
+// ============================================================
 class _MainMealButton extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -497,6 +523,8 @@ class _MainMealButton extends StatelessWidget {
   }
 }
 
+// ============================================================
+// ВИДЖЕТ: Кнопка перекуса
 // ============================================================
 class _SnackButton extends StatelessWidget {
   final String label;
