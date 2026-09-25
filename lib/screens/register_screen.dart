@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../db/database_helper.dart';
-import '../services/auth_service.dart';
-import 'settings_screen.dart';
+import 'package:diax/db/database_helper.dart';
+import 'package:diax/services/auth_service.dart';
+import 'package:diax/screens/main/main_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -19,9 +19,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
   bool _isLoading = false;
-  
+
   // Режим входа (true) или регистрации (false)
-  bool _isLoginMode = false; 
+  bool _isLoginMode = false;
 
   @override
   void dispose() {
@@ -56,18 +56,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     if (ok) {
       await AuthService.login(); // Запоминаем статус
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_isLoginMode ? 'Вход выполнен!' : 'Регистрация успешна!')),
+        SnackBar(
+          content: Text(
+            _isLoginMode ? 'Вход выполнен!' : 'Регистрация успешна!',
+          ),
+        ),
       );
-      
+
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const SettingsScreen()),
+        MaterialPageRoute(builder: (_) => const MainScreen()),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_isLoginMode ? 'Неверный логин или пароль' : 'Такой логин уже существует')),
+        SnackBar(
+          content: Text(
+            _isLoginMode
+                ? 'Неверный логин или пароль'
+                : 'Такой логин уже существует',
+          ),
+        ),
       );
     }
   }
@@ -75,9 +85,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_isLoginMode ? 'Вход' : 'Регистрация'),
-      ),
+      appBar: AppBar(title: Text(_isLoginMode ? 'Вход' : 'Регистрация')),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -96,7 +104,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                     validator: (v) {
                       if (v == null || v.trim().isEmpty) return 'Введите логин';
-                      if (v.trim().length < 3) return 'Логин не короче 3 символов';
+                      if (v.trim().length < 3)
+                        return 'Логин не короче 3 символов';
                       return null;
                     },
                   ),
@@ -110,8 +119,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       labelText: 'Пароль',
                       border: const OutlineInputBorder(),
                       suffixIcon: IconButton(
-                        icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                        ),
+                        onPressed: () => setState(
+                          () => _obscurePassword = !_obscurePassword,
+                        ),
                       ),
                     ),
                     validator: (v) {
@@ -123,7 +138,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   const SizedBox(height: 16),
 
                   // Повтор пароля (ПОКАЗЫВАЕМ ТОЛЬКО ПРИ РЕГИСТРАЦИИ)
-                  if (!_isLoginMode) 
+                  if (!_isLoginMode)
                     TextFormField(
                       controller: _confirmController,
                       obscureText: _obscureConfirm,
@@ -131,17 +146,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         labelText: 'Повторите пароль',
                         border: const OutlineInputBorder(),
                         suffixIcon: IconButton(
-                          icon: Icon(_obscureConfirm ? Icons.visibility_off : Icons.visibility),
-                          onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                          icon: Icon(
+                            _obscureConfirm
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                          ),
+                          onPressed: () => setState(
+                            () => _obscureConfirm = !_obscureConfirm,
+                          ),
                         ),
                       ),
                       validator: (v) {
                         if (v == null || v.isEmpty) return null;
-                        if (v != _passwordController.text) return 'Пароли не совпадают';
+                        if (v != _passwordController.text)
+                          return 'Пароли не совпадают';
                         return null;
                       },
                     ),
-                  
+
                   if (!_isLoginMode) const SizedBox(height: 24),
                   if (_isLoginMode) const SizedBox(height: 8),
 
@@ -153,7 +175,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       onPressed: _isLoading ? null : _submit,
                       child: _isLoading
                           ? const SizedBox(
-                              width: 22, height: 22,
+                              width: 22,
+                              height: 22,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : Text(_isLoginMode ? 'Войти' : 'Зарегистрироваться'),
@@ -167,15 +190,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     onPressed: () {
                       setState(() {
                         _isLoginMode = !_isLoginMode; // Переключаем режим
-                        _formKey.currentState?.reset(); // Сбрасываем ошибки ввода
+                        _formKey.currentState
+                            ?.reset(); // Сбрасываем ошибки ввода
                       });
                     },
                     child: Text(
-                      _isLoginMode 
-                        ? 'Нет аккаунта? Зарегистрироваться' 
-                        : 'Уже есть аккаунт? Войти'
+                      _isLoginMode
+                          ? 'Нет аккаунта? Зарегистрироваться'
+                          : 'Уже есть аккаунт? Войти',
                     ),
-                  )
+                  ),
                 ],
               ),
             ),
