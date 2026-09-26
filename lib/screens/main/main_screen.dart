@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 // Импорты экранов, которые будут отображаться во вкладках
-import 'package:diax/screens/tabs/home_tab.dart';
+import 'package:diax/screens/tabs/calculator_screen.dart';
 import 'package:diax/screens/tabs/calendar_screen.dart';
 import 'package:diax/screens/tabs/settings_screen.dart';
 
@@ -19,7 +19,7 @@ class _MainScreenState extends State<MainScreen> {
   // Список экранов, которые будут переключаться через нижнее меню.
   // ПОРЯДОК ВАЖЕН: индекс в этом списке соответствует индексу в BottomNavigationBarItem.
   final List<Widget> _screens = const [
-    HomeTab(), // Индекс 0
+    CalculatorScreen(), // Индекс 0
     CalendarScreen(), // Индекс 1
     SettingsScreen(), // Индекс 2
   ];
@@ -50,9 +50,9 @@ class _MainScreenState extends State<MainScreen> {
         unselectedItemColor: Colors.grey,
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
-            label: 'Главная',
+            icon: Icon(Icons.calculate_outlined),
+            activeIcon: Icon(Icons.calculate),
+            label: 'Калькулятор',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.calendar_today_outlined),

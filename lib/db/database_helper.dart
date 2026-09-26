@@ -2,6 +2,7 @@ import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
 import 'package:diax/models/meal_entry.dart';
+import 'package:diax/models/saved_calculation.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._internal();
@@ -21,15 +22,14 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 3, // <-- версия 3: users, settings, meal_entries, reminders
+      version: 4,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
   }
 
-  // ==================== СОЗДАНИЕ ТАБЛИЦ ====================
   Future<void> _onCreate(Database db, int version) async {
-    // Таблица пользователей
+    // === Пользователи ===
     await db.execute('''
       CREATE TABLE users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,8 +39,7 @@ class DatabaseHelper {
       )
     ''');
 
-    // Таблица настроек
-    // unit: 0 - ммоль/л, 1 - мг/дл
+    // === Настройки ===
     await db.execute('''
       CREATE TABLE settings (
         user_id INTEGER PRIMARY KEY,
@@ -50,7 +49,7 @@ class DatabaseHelper {
       )
     ''');
 
-    // Таблица записей о приёмах пищи
+    // === Записи о еде ===
     await db.execute('''
       CREATE TABLE meal_entries (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,8 +63,8 @@ class DatabaseHelper {
       )
     ''');
 
-    // Таблица напоминаний
-    // type: 'measure' — измерение сахара, 'snack' — перекус, 'meal' — еда
+    // === Напоминания ===
+    // type: 'measure' — измерение сахара, 'snack' — перекус
     await db.execute('''
       CREATE TABLE reminders (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -75,9 +74,22 @@ class DatabaseHelper {
         enabled INTEGER DEFAULT 1
       )
     ''');
+
+    // === Сохранённые расчёты ХЕ ===
+    await db.execute('''
+      CREATE TABLE saved_calculations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at TEXT NOT NULL,
+        product_name TEXT DEFAULT '',
+        carbs_per_100 REAL NOT NULL,
+        weight REAL NOT NULL,
+        bread_units REAL NOT NULL,
+        carbs_in_portion REAL NOT NULL,
+        photo_path TEXT
+      )
+    ''');
   }
 
-  // ==================== ОБНОВЛЕНИЕ СТАРЫХ БД ====================
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await db.execute('''
@@ -104,14 +116,26 @@ class DatabaseHelper {
         )
       ''');
     }
+    if (oldVersion < 4) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS saved_calculations (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          created_at TEXT NOT NULL,
+          product_name TEXT DEFAULT '',
+          carbs_per_100 REAL NOT NULL,
+          weight REAL NOT NULL,
+          bread_units REAL NOT NULL,
+          carbs_in_portion REAL NOT NULL,
+          photo_path TEXT
+        )
+      ''');
+    }
   }
 
   // ==================== ПОЛЬЗОВАТЕЛИ ====================
 
-  /// Регистрация. Возвращает false, если логин уже занят.
   Future<bool> registerUser(String login, String password) async {
     final db = await database;
-
     final existing = await db.query(
       'users',
       where: 'login = ?',
@@ -128,7 +152,6 @@ class DatabaseHelper {
     return true;
   }
 
-  /// Проверка логина/пароля
   Future<bool> checkUser(String login, String password) async {
     final db = await database;
     final result = await db.query(
@@ -140,13 +163,11 @@ class DatabaseHelper {
     return result.isNotEmpty;
   }
 
-  /// Все пользователи (для отладки)
   Future<List<Map<String, dynamic>>> getAllUsers() async {
     final db = await database;
     return db.query('users');
   }
 
-  /// Получить ID пользователя по логину и паролю
   Future<int?> getUserId(String login, String password) async {
     final db = await database;
     final result = await db.query(
@@ -162,7 +183,6 @@ class DatabaseHelper {
 
   // ==================== НАСТРОЙКИ ====================
 
-  /// Сохранить или обновить настройки
   Future<void> saveSettings(
     int userId,
     int unit,
@@ -178,7 +198,6 @@ class DatabaseHelper {
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  /// Получить настройки пользователя по его ID
   Future<Map<String, dynamic>?> getSettings(int userId) async {
     final db = await database;
     final result = await db.query(
@@ -186,16 +205,12 @@ class DatabaseHelper {
       where: 'user_id = ?',
       whereArgs: [userId],
     );
-
-    if (result.isNotEmpty) {
-      return result.first;
-    }
+    if (result.isNotEmpty) return result.first;
     return null;
   }
 
-  // ==================== ЗАПИСИ О ПРИЁМАХ ПИЩИ ====================
+  // ==================== ЗАПИСИ О ЕДЕ ====================
 
-  /// Сохранить (или перезаписать) запись о приёме пищи
   Future<void> saveMealEntry(MealEntry entry) async {
     final db = await database;
     await db.insert(
@@ -205,7 +220,6 @@ class DatabaseHelper {
     );
   }
 
-  /// Загрузить запись по дате и названию приёма пищи
   Future<MealEntry?> getMealEntry(String date, String mealName) async {
     final db = await database;
     final result = await db.query(
@@ -218,7 +232,6 @@ class DatabaseHelper {
     return MealEntry.fromMap(result.first);
   }
 
-  /// Загрузить все записи на конкретную дату
   Future<List<MealEntry>> getMealEntriesForDate(String date) async {
     final db = await database;
     final result = await db.query(
@@ -229,7 +242,6 @@ class DatabaseHelper {
     return result.map((map) => MealEntry.fromMap(map)).toList();
   }
 
-  /// Удалить запись
   Future<void> deleteMealEntry(String date, String mealName) async {
     final db = await database;
     await db.delete(
@@ -241,7 +253,6 @@ class DatabaseHelper {
 
   // ==================== НАПОМИНАНИЯ ====================
 
-  /// Добавить напоминание. Возвращает ID созданной записи.
   Future<int> addReminder(int userId, String type, String time) async {
     final db = await database;
     return await db.insert('reminders', {
@@ -252,7 +263,6 @@ class DatabaseHelper {
     });
   }
 
-  /// Получить все напоминания пользователя определённого типа
   Future<List<Map<String, dynamic>>> getReminders(
     int userId,
     String type,
@@ -266,18 +276,6 @@ class DatabaseHelper {
     );
   }
 
-  /// Получить ВСЕ напоминания пользователя (без фильтра по типу)
-  Future<List<Map<String, dynamic>>> getAllReminders(int userId) async {
-    final db = await database;
-    return db.query(
-      'reminders',
-      where: 'user_id = ?',
-      whereArgs: [userId],
-      orderBy: 'time ASC',
-    );
-  }
-
-  /// Обновить время напоминания
   Future<void> updateReminder(int id, String newTime) async {
     final db = await database;
     await db.update(
@@ -288,24 +286,11 @@ class DatabaseHelper {
     );
   }
 
-  /// Включить / выключить напоминание
-  Future<void> setReminderEnabled(int id, bool enabled) async {
-    final db = await database;
-    await db.update(
-      'reminders',
-      {'enabled': enabled ? 1 : 0},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-  }
-
-  /// Удалить напоминание
   Future<void> deleteReminder(int id) async {
     final db = await database;
     await db.delete('reminders', where: 'id = ?', whereArgs: [id]);
   }
 
-  /// Удалить все напоминания пользователя определённого типа
   Future<void> deleteAllReminders(int userId, String type) async {
     final db = await database;
     await db.delete(
@@ -313,5 +298,26 @@ class DatabaseHelper {
       where: 'user_id = ? AND type = ?',
       whereArgs: [userId, type],
     );
+  }
+
+  // ==================== СОХРАНЁННЫЕ РАСЧЁТЫ ХЕ ====================
+
+  Future<int> saveCalculation(SavedCalculation calc) async {
+    final db = await database;
+    return await db.insert('saved_calculations', calc.toMap());
+  }
+
+  Future<List<SavedCalculation>> getAllCalculations() async {
+    final db = await database;
+    final result = await db.query(
+      'saved_calculations',
+      orderBy: 'created_at DESC',
+    );
+    return result.map((map) => SavedCalculation.fromMap(map)).toList();
+  }
+
+  Future<void> deleteCalculation(int id) async {
+    final db = await database;
+    await db.delete('saved_calculations', where: 'id = ?', whereArgs: [id]);
   }
 }

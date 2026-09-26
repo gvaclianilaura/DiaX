@@ -184,7 +184,7 @@ class _ReminderListState extends State<ReminderList> {
                       vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: widget.color.withOpacity(0.15),
+                      color: widget.color.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
@@ -212,7 +212,8 @@ class _ReminderListState extends State<ReminderList> {
                 ),
               )
             else
-              ..._reminders.map((r) => _buildTimeTile(r)).toList(),
+              // ✅ ИСПРАВЛЕНО: убран .toList() в spread-операторе
+              ..._reminders.map((r) => _buildTimeTile(r)),
 
             const SizedBox(height: 8),
 
@@ -225,7 +226,7 @@ class _ReminderListState extends State<ReminderList> {
                 label: const Text('Добавить время'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: widget.color,
-                  side: BorderSide(color: widget.color.withOpacity(0.5)),
+                  side: BorderSide(color: widget.color.withValues(alpha: 0.5)),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),

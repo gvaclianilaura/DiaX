@@ -51,11 +51,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ok = await DatabaseHelper.instance.registerUser(login, password);
     }
 
+    // ✅ Проверка после первого await
     if (!mounted) return;
     setState(() => _isLoading = false);
 
     if (ok) {
       await AuthService.login(); // Запоминаем статус
+
+      // ✅ Проверка после второго await
+      if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -64,6 +68,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         ),
       );
+
+      // ✅ Проверка перед навигацией
+      if (!mounted) return;
 
       Navigator.pushReplacement(
         context,
@@ -95,7 +102,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Логин
+                  // === Логин ===
                   TextFormField(
                     controller: _loginController,
                     decoration: const InputDecoration(
@@ -103,15 +110,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       border: OutlineInputBorder(),
                     ),
                     validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'Введите логин';
-                      if (v.trim().length < 3)
+                      if (v == null || v.trim().isEmpty) {
+                        return 'Введите логин';
+                      }
+                      // ✅ Добавлены фигурные скобки
+                      if (v.trim().length < 3) {
                         return 'Логин не короче 3 символов';
+                      }
                       return null;
                     },
                   ),
                   const SizedBox(height: 16),
 
-                  // Пароль
+                  // === Пароль ===
                   TextFormField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
@@ -130,14 +141,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                     ),
                     validator: (v) {
-                      if (v == null || v.isEmpty) return 'Введите пароль';
-                      if (v.length < 4) return 'Пароль не короче 4 символов';
+                      if (v == null || v.isEmpty) {
+                        return 'Введите пароль';
+                      }
+                      // ✅ Добавлены фигурные скобки
+                      if (v.length < 4) {
+                        return 'Пароль не короче 4 символов';
+                      }
                       return null;
                     },
                   ),
                   const SizedBox(height: 16),
 
-                  // Повтор пароля (ПОКАЗЫВАЕМ ТОЛЬКО ПРИ РЕГИСТРАЦИИ)
+                  // === Повтор пароля (только при регистрации) ===
                   if (!_isLoginMode)
                     TextFormField(
                       controller: _confirmController,
@@ -157,9 +173,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                       ),
                       validator: (v) {
-                        if (v == null || v.isEmpty) return null;
-                        if (v != _passwordController.text)
+                        if (v == null || v.isEmpty) {
+                          return null;
+                        }
+                        // ✅ Добавлены фигурные скобки
+                        if (v != _passwordController.text) {
                           return 'Пароли не совпадают';
+                        }
                         return null;
                       },
                     ),
@@ -167,7 +187,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   if (!_isLoginMode) const SizedBox(height: 24),
                   if (_isLoginMode) const SizedBox(height: 8),
 
-                  // Главная Кнопка
+                  // === Главная кнопка ===
                   SizedBox(
                     width: double.infinity,
                     height: 48,
@@ -185,13 +205,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                   const SizedBox(height: 16),
 
-                  // КНОПКА ПЕРЕКЛЮЧЕНИЯ РЕЖИМОВ (Вход <-> Регистрация)
+                  // === Переключение режимов ===
                   TextButton(
                     onPressed: () {
                       setState(() {
-                        _isLoginMode = !_isLoginMode; // Переключаем режим
-                        _formKey.currentState
-                            ?.reset(); // Сбрасываем ошибки ввода
+                        _isLoginMode = !_isLoginMode;
+                        _formKey.currentState?.reset();
                       });
                     },
                     child: Text(

@@ -97,7 +97,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     cellMargin: const EdgeInsets.all(4),
                     cellPadding: EdgeInsets.zero,
                     todayDecoration: BoxDecoration(
-                      color: Colors.blueAccent.withOpacity(0.5),
+                      color: Colors.blueAccent.withValues(alpha: 0.3),
                       shape: BoxShape.circle,
                     ),
                     todayTextStyle: const TextStyle(
@@ -508,12 +508,12 @@ class _MainMealButton extends StatelessWidget {
           ],
         ),
         style: ElevatedButton.styleFrom(
-          backgroundColor: color.withOpacity(0.15),
+          backgroundColor: color.withValues(alpha: 0.15),
           foregroundColor: color,
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: color.withOpacity(0.4), width: 1.2),
+            side: BorderSide(color: color.withValues(alpha: 0.4), width: 1.2),
           ),
           alignment: Alignment.centerLeft,
           padding: const EdgeInsets.symmetric(horizontal: 20),
