@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'package:diax/db/database_helper.dart';
 import 'package:diax/models/saved_calculation.dart';
+import 'package:diax/screens/saved_calculations_screen.dart';
 
 class CalculatorScreen extends StatefulWidget {
   const CalculatorScreen({super.key});
@@ -48,11 +49,11 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     final weight = _parseDouble(_weightController.text);
 
     if (carbsPer100 == null || weight == null) {
-      _showSnack('Заполните оба поля');
+      _showSnack('Заполните оба поля', color: Colors.orange.shade400);
       return;
     }
     if (carbsPer100 < 0 || weight < 0) {
-      _showSnack('Значения должны быть положительными');
+      _showSnack('Значения должны быть положительными', color: Colors.orange.shade400);
       return;
     }
 
@@ -91,7 +92,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         _photoFile = savedFile;
       });
     } catch (e) {
-      _showSnack('Не удалось сделать фото: $e');
+      _showSnack('Не удалось сделать фото', color: Colors.redAccent);
     }
   }
 
@@ -108,7 +109,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
   Future<void> _saveResult() async {
     if (_resultBreadUnits == null || _resultCarbsInPortion == null) {
-      _showSnack('Сначала рассчитайте ХЕ');
+      _showSnack('Сначала рассчитайте ХЕ', color: Colors.orange.shade400);
       return;
     }
 
@@ -129,16 +130,9 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     await DatabaseHelper.instance.saveCalculation(calc);
 
     if (!mounted) return;
-    _showSnack('Результат сохранён', color: Colors.green);
+    _showSnack('Результат сохранён', color: const Color(0xFF2E7D32));
 
-    setState(() {
-      _carbsPer100Controller.clear();
-      _weightController.clear();
-      _productNameController.clear();
-      _resultBreadUnits = null;
-      _resultCarbsInPortion = null;
-      _photoFile = null;
-    });
+    _clear();
   }
 
   void _clear() {
@@ -155,8 +149,11 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
   void _showSnack(String message, {Color? color}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
-        backgroundColor: color,
+        content: Text(message, style: const TextStyle(fontWeight: FontWeight.w500)),
+        backgroundColor: color ?? Colors.grey.shade800,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: const EdgeInsets.all(16),
         duration: const Duration(seconds: 2),
       ),
     );
@@ -164,246 +161,313 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Очень легкий серый оттенок фона, чтобы белые карточки казались объемными
     return Scaffold(
+      backgroundColor: const Color(0xFFF7F9F7), 
       appBar: AppBar(
-        title: const Text('Калькулятор ХЕ'),
+        title: const Text(
+          'Калькулятор',
+          style: TextStyle(fontWeight: FontWeight.w700, letterSpacing: -0.5),
+        ),
         centerTitle: true,
+        backgroundColor: Colors.transparent, // Воздушная шапка
+        foregroundColor: const Color(0xFF1B4332), // Глубокий темно-зеленый
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.format_list_bulleted_rounded),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const SavedCalculationsScreen(),
+              ),
+            );
+          },
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded),
             onPressed: _clear,
-            tooltip: 'Сбросить',
           ),
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // === ИНФО ===
-            Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: Colors.grey.shade300),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: const [
-                        Icon(
-                          Icons.info_outline,
-                          color: Colors.blueAccent,
-                          size: 22,
-                        ),
-                        SizedBox(width: 8),
-                        Text(
-                          'Как это работает',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '1 хлебная единица (ХЕ) = 10 г углеводов.\n'
-                      'Введите данные — калькулятор посчитает ХЕ.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey.shade700,
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            TextField(
-              controller: _productNameController,
-              decoration: const InputDecoration(
-                labelText: 'Название продукта (необязательно)',
-                hintText: 'Например: гречка',
-                prefixIcon: Icon(Icons.restaurant_menu),
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            TextField(
-              controller: _carbsPer100Controller,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-              ],
-              decoration: const InputDecoration(
-                labelText: 'Углеводы на 100 г продукта',
-                hintText: 'Например: 15',
-                suffixText: 'г',
-                prefixIcon: Icon(Icons.grain),
-                border: OutlineInputBorder(),
-              ),
-              onChanged: (_) => _resetResultIfNeeded(),
-            ),
-            const SizedBox(height: 12),
-
-            TextField(
-              controller: _weightController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-              ],
-              decoration: const InputDecoration(
-                labelText: 'Масса порции',
-                hintText: 'Например: 150',
-                suffixText: 'г',
-                prefixIcon: Icon(Icons.scale),
-                border: OutlineInputBorder(),
-              ),
-              onChanged: (_) => _resetResultIfNeeded(),
-              onSubmitted: (_) => _calculate(),
-            ),
-
-            const SizedBox(height: 20),
-
-            SizedBox(
-              height: 52,
-              child: ElevatedButton.icon(
-                onPressed: _calculate,
-                icon: const Icon(Icons.calculate),
-                label: const Text(
-                  'Рассчитать',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueAccent,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+            // === ЖУРНАЛЬНЫЙ ИНФО-БЛОК ===
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.green.withValues(alpha: 0.04),
+                    blurRadius: 20,
+                    offset: const Offset(0, 4),
                   ),
+                ],
+                border: const Border(
+                  left: BorderSide(color: Color(0xFF4CAF50), width: 4),
                 ),
               ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: const [
+                      Icon(Icons.lightbulb_outline_rounded, color: Color(0xFF4CAF50), size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        'Справка',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF2E7D32),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '1 хлебная единица (ХЕ) = 10 г углеводов.\nВведите данные, и мы всё рассчитаем.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey.shade600,
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ),
             ),
+            const SizedBox(height: 24),
 
-            const SizedBox(height: 20),
+            // === СОВРЕМЕННЫЕ ПОЛЯ ВВОДА ===
+            _buildModernTextField(
+              controller: _productNameController,
+              label: 'Название продукта',
+              hint: 'Например: Яблоко',
+              icon: Icons.fastfood_rounded,
+            ),
+            const SizedBox(height: 16),
+            _buildModernTextField(
+              controller: _carbsPer100Controller,
+              label: 'Углеводы на 100 г',
+              hint: '0.0',
+              icon: Icons.grain_rounded,
+              suffix: 'г',
+              isNumber: true,
+              onChanged: (_) => _resetResultIfNeeded(),
+            ),
+            const SizedBox(height: 16),
+            _buildModernTextField(
+              controller: _weightController,
+              label: 'Масса порции',
+              hint: '0',
+              icon: Icons.scale_rounded,
+              suffix: 'г',
+              isNumber: true,
+              onChanged: (_) => _resetResultIfNeeded(),
+            ),
+            const SizedBox(height: 32),
 
+            // === ГЛАВНАЯ КНОПКА ===
+            ElevatedButton(
+              onPressed: _calculate,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32), // Изумрудный
+                foregroundColor: Colors.white,
+                elevation: 4,
+                shadowColor: const Color(0xFF2E7D32).withValues(alpha: 0.4),
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              child: const Text(
+                'Рассчитать',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // === РЕЗУЛЬТАТ ===
             if (_resultBreadUnits != null && _resultCarbsInPortion != null) ...[
               _buildResultCard(),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               _buildPhotoSection(),
-              const SizedBox(height: 16),
-              SizedBox(
-                height: 52,
-                child: ElevatedButton.icon(
-                  onPressed: _saveResult,
-                  icon: const Icon(Icons.save),
-                  label: const Text(
-                    'Сохранить результат',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+              const SizedBox(height: 24),
+              
+              // Вторичная кнопка (Outlined)
+              OutlinedButton.icon(
+                onPressed: _saveResult,
+                icon: const Icon(Icons.bookmark_border_rounded, size: 20),
+                label: const Text(
+                  'Сохранить в дневник',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF2E7D32),
+                  side: const BorderSide(color: Color(0xFF2E7D32), width: 1.5),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
                   ),
                 ),
               ),
+              const SizedBox(height: 32),
             ],
-
-            const SizedBox(height: 20),
           ],
         ),
       ),
     );
   }
 
-  void _resetResultIfNeeded() {
-    if (_resultBreadUnits != null) {
-      setState(() {
-        _resultBreadUnits = null;
-        _resultCarbsInPortion = null;
-      });
-    }
+  // Виджет кастомного поля ввода с мягкими тенями
+  Widget _buildModernTextField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    String? suffix,
+    bool isNumber = false,
+    Function(String)? onChanged,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 15,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: controller,
+        keyboardType: isNumber ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
+        inputFormatters: isNumber ? [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))] : null,
+        onChanged: onChanged,
+        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+          hintText: hint,
+          hintStyle: TextStyle(color: Colors.grey.shade300),
+          prefixIcon: Icon(icon, color: const Color(0xFF81C784), size: 22),
+          suffixText: suffix,
+          suffixStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
+          ),
+          filled: true,
+          fillColor: Colors.transparent,
+          contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+        ),
+      ),
+    );
   }
 
+  // Премиальная карточка результата с водяным знаком
   Widget _buildResultCard() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.green.withValues(alpha: 0.5),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: const Color(0xFF2E7D32).withValues(alpha: 0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-      child: Column(
+      child: Stack(
         children: [
-          const Text(
-            'Хлебные единицы',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.white70,
-              letterSpacing: 1.2,
+          // Водяной знак на фоне
+          Positioned(
+            right: -20,
+            bottom: -20,
+            child: Transform.rotate(
+              angle: -0.2,
+              child: Icon(
+                Icons.bakery_dining_rounded,
+                size: 140,
+                color: Colors.white.withValues(alpha: 0.1),
+              ),
             ),
           ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                _formatNumber(_resultBreadUnits!),
-                style: const TextStyle(
-                  fontSize: 48,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  height: 1,
+          // Основной контент
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                const Text(
+                  'РЕЗУЛЬТАТ',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white60,
+                    letterSpacing: 2,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                'ХЕ',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white70,
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      _formatNumber(_resultBreadUnits!),
+                      style: const TextStyle(
+                        fontSize: 56,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        height: 1,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 8.0),
+                      child: Text(
+                        'ХЕ',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              'Углеводов в порции: ${_resultCarbsInPortion!.toStringAsFixed(1)} г',
-              style: const TextStyle(fontSize: 13, color: Colors.white),
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'Углеводов: ${_resultCarbsInPortion!.toStringAsFixed(1)} г',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -412,74 +476,84 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
   }
 
   Widget _buildPhotoSection() {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade300),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 15,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(
-                  Icons.photo_camera,
-                  color: Colors.blueAccent,
-                  size: 22,
-                ),
-                const SizedBox(width: 8),
-                const Text(
-                  'Фото продукта',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                ),
-                const Spacer(),
-                if (_photoFile != null)
-                  IconButton(
-                    icon: const Icon(
-                      Icons.delete_outline,
-                      color: Colors.redAccent,
-                      size: 20,
-                    ),
-                    onPressed: _removePhoto,
-                    tooltip: 'Удалить фото',
-                  ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (_photoFile == null)
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _takePhoto,
-                  icon: const Icon(Icons.add_a_photo, size: 20),
-                  label: const Text('Сделать фото'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.blueAccent,
-                    side: BorderSide(
-                      color: Colors.blueAccent.withValues(alpha: 0.5),
-                    ),
-                    shape: RoundedRectangleBorder(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F5E9),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: const Icon(Icons.camera_alt_rounded, color: Color(0xFF4CAF50), size: 20),
                   ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Фото продукта',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1B4332)),
+                  ),
+                ],
+              ),
+              if (_photoFile != null)
+                IconButton(
+                  icon: const Icon(Icons.delete_rounded, color: Colors.redAccent),
+                  onPressed: _removePhoto,
                 ),
-              )
-            else
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Image.file(
-                  _photoFile!,
-                  height: 200,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (_photoFile == null)
+            InkWell(
+              onTap: _takePhoto,
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                decoration: BoxDecoration(
+                  border: Border.all(color: const Color(0xFFE8F5E9), width: 2),
+                  borderRadius: BorderRadius.circular(16),
+                  color: const Color(0xFFFAFAFA),
+                ),
+                child: Column(
+                  children: [
+                    Icon(Icons.add_a_photo_rounded, color: Colors.green.shade300, size: 32),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Нажмите, чтобы добавить фото',
+                      style: TextStyle(color: Colors.green.shade600, fontWeight: FontWeight.w500),
+                    ),
+                  ],
                 ),
               ),
-          ],
-        ),
+            )
+          else
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Image.file(
+                _photoFile!,
+                height: 220,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -487,5 +561,13 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
   String _formatNumber(double value) {
     if (value == value.roundToDouble()) return value.toInt().toString();
     return value.toString();
+  }
+  void _resetResultIfNeeded() {
+    if (_resultBreadUnits != null) {
+      setState(() {
+        _resultBreadUnits = null;
+        _resultCarbsInPortion = null;
+      });
+    }
   }
 }

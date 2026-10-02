@@ -18,7 +18,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
   DateTime _focusedDay = DateTime.now();
 
   String? _selectedMeal;
-  String _glucoseUnit = 'mmol';
+  String _glucoseUnit = 'mmol'; // По умолчанию
 
   final TextEditingController _glucoseController = TextEditingController();
   final TextEditingController _breadUnitsController = TextEditingController();
@@ -26,6 +26,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
   final TextEditingController _noteController = TextEditingController();
 
   Set<String> _filledKeys = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettingsAndData(); // Сразу при открытии экрана грузим и настройки, и галочки
+  }
 
   @override
   void dispose() {
@@ -42,12 +48,18 @@ class _CalendarScreenState extends State<CalendarScreen> {
         '${date.day.toString().padLeft(2, '0')}';
   }
 
-  Future<void> _loadFilledKeys() async {
+  // === Единая функция загрузки при старте и смене дня ===
+  Future<void> _loadSettingsAndData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedUnit = prefs.getString('glucose_unit') ?? 'mmol';
+
     final entries = await DatabaseHelper.instance.getMealEntriesForDate(
       _dateKey(_selectedDay),
     );
+
     if (!mounted) return;
     setState(() {
+      _glucoseUnit = savedUnit; // Обновляем единицу измерения!
       _filledKeys = entries.map((e) => e.mealName).toSet();
     });
   }
@@ -57,7 +69,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final screenHeight = MediaQuery.of(context).size.height;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Календарь'), centerTitle: true),
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text('Календарь'),
+        backgroundColor: Colors.green, // Зеленая шапка
+        foregroundColor: Colors.white,
+        centerTitle: true,
+      ),
       body: Column(
         children: [
           // ============================================================
@@ -67,48 +85,46 @@ class _CalendarScreenState extends State<CalendarScreen> {
             height: screenHeight * 0.42,
             decoration: BoxDecoration(
               border: Border(
-                bottom: BorderSide(color: Colors.grey.shade300, width: 1),
+                bottom: BorderSide(color: Colors.green.shade100, width: 1),
               ),
             ),
             child: LayoutBuilder(
               builder: (context, constraints) {
                 return TableCalendar(
                   locale: 'ru_RU',
-                  // === Фиксированная высота строки календаря ===
-                  // (высота контейнера − высота шапки) / 6 строк
                   rowHeight: (constraints.maxHeight - 90) / 6,
-
                   headerStyle: const HeaderStyle(
                     formatButtonVisible: false,
                     titleCentered: true,
                     titleTextStyle: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
+                      color: Colors.green, // Зеленый месяц
                     ),
                   ),
                   daysOfWeekStyle: const DaysOfWeekStyle(
                     weekdayStyle: TextStyle(fontWeight: FontWeight.w600),
                     weekendStyle: TextStyle(
                       fontWeight: FontWeight.w600,
-                      color: Colors.redAccent,
+                      color: Colors.orange, // Смягчили красный на оранжевый для выходных
                     ),
                   ),
                   calendarStyle: CalendarStyle(
                     cellMargin: const EdgeInsets.all(4),
                     cellPadding: EdgeInsets.zero,
                     todayDecoration: BoxDecoration(
-                      color: Colors.blueAccent.withValues(alpha: 0.3),
+                      color: Colors.green.withValues(alpha: 0.3), // Бледно-зеленый сегодня
                       shape: BoxShape.circle,
                     ),
                     todayTextStyle: const TextStyle(
-                      color: Colors.white,
+                      color: Colors.green,
                       fontWeight: FontWeight.bold,
                     ),
                     selectedDecoration: const BoxDecoration(
-                      color: Colors.blueAccent,
+                      color: Colors.green, // Насыщенно-зеленый выбранный день
                       shape: BoxShape.circle,
                     ),
-                    weekendTextStyle: const TextStyle(color: Colors.redAccent),
+                    weekendTextStyle: const TextStyle(color: Colors.orange),
                     outsideDaysVisible: false,
                     defaultTextStyle: const TextStyle(fontSize: 14),
                   ),
@@ -122,7 +138,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       _selectedDay = selectedDay;
                       _focusedDay = focusedDay;
                     });
-                    _loadFilledKeys();
+                    _loadSettingsAndData(); // Обновляем данные при клике на день
                   },
                   onPageChanged: (focusedDay) {
                     setState(() {
@@ -177,7 +193,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     _MainMealButton(
                       label: 'Ужин',
                       icon: Icons.dinner_dining,
-                      color: Colors.deepPurple,
+                      color: Colors.teal, // Заменили фиолетовый на бирюзовый (в тему)
                       isFilled: _filledKeys.contains('Ужин'),
                       onTap: () => _openMealForm('Ужин'),
                     ),
@@ -200,10 +216,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
   }
 
-  // ============================================================
-  // ОТКРЫТИЕ ФОРМЫ И ЗАГРУЗКА СУЩЕСТВУЮЩЕЙ ЗАПИСИ
-  // ============================================================
   Future<void> _openMealForm(String mealName) async {
+    // Еще раз проверяем настройки прямо перед открытием формы на всякий случай
     final prefs = await SharedPreferences.getInstance();
     final savedUnit = prefs.getString('glucose_unit') ?? 'mmol';
 
@@ -217,7 +231,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
     setState(() {
       _glucoseUnit = savedUnit;
       _selectedMeal = mealName;
-
       _glucoseController.text = existing?.glucose?.toString() ?? '';
       _breadUnitsController.text = existing?.breadUnits?.toString() ?? '';
       _insulinController.text = existing?.insulin?.toString() ?? '';
@@ -231,9 +244,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
     });
   }
 
-  // ============================================================
-  // СОХРАНЕНИЕ В БД
-  // ============================================================
   Future<void> _saveMealEntry() async {
     final mealName = _selectedMeal;
     if (mealName == null) return;
@@ -258,7 +268,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       await DatabaseHelper.instance.saveMealEntry(entry);
     }
 
-    await _loadFilledKeys();
+    await _loadSettingsAndData();
 
     if (!mounted) return;
 
@@ -268,13 +278,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
           entry.isEmpty
               ? 'Запись удалена'
               : 'Сохранено: $mealName\n'
-                    'Глюкоза: ${_glucoseController.text} '
-                    '${_glucoseUnit == 'mmol' ? 'ммоль/л' : 'мг/дл'}\n'
-                    'ХЕ: ${_breadUnitsController.text}\n'
-                    'Инсулин: ${_insulinController.text} ед\n'
-                    'Заметка: $note',
+                  'Глюкоза: ${_glucoseController.text} '
+                  '${_glucoseUnit == 'mmol' ? 'ммоль/л' : 'мг/дл'}\n'
+                  'ХЕ: ${_breadUnitsController.text}\n'
+                  'Инсулин: ${_insulinController.text} ед\n'
+                  'Заметка: $note',
         ),
         duration: const Duration(seconds: 3),
+        backgroundColor: Colors.green.shade700, // Зеленый снэкбар
       ),
     );
 
@@ -286,18 +297,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return double.tryParse(text.replaceAll(',', '.'));
   }
 
-  // ============================================================
-  // ФОРМА ВВОДА
-  // ============================================================
   Widget _buildMealForm() {
     final unitLabel = _glucoseUnit == 'mmol' ? 'ммоль/л' : 'мг/дл';
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+        color: Colors.green.shade50, // Нежно-зеленый фон формы
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(color: Colors.green.shade200),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -307,14 +315,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
               Expanded(
                 child: Text(
                   _selectedMeal ?? '',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
+                    color: Colors.green.shade800,
                   ),
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.close),
+                icon: const Icon(Icons.close, color: Colors.grey),
                 onPressed: _closeMealForm,
                 tooltip: 'Закрыть',
               ),
@@ -329,17 +338,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
             label: 'Глюкоза',
             field: TextField(
               controller: _glucoseController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-              ],
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
               decoration: InputDecoration(
                 hintText: '0.0',
                 suffixText: unitLabel,
                 isDense: true,
                 border: const OutlineInputBorder(),
+                focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.green)),
               ),
             ),
           ),
@@ -352,17 +358,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
             label: 'Хлебные ед.',
             field: TextField(
               controller: _breadUnitsController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-              ],
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
               decoration: const InputDecoration(
                 hintText: '0.0',
                 suffixText: 'ХЕ',
                 isDense: true,
                 border: OutlineInputBorder(),
+                focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.green)),
               ),
             ),
           ),
@@ -371,21 +374,18 @@ class _CalendarScreenState extends State<CalendarScreen> {
           // Строка 3: Инсулин
           _buildFormRow(
             icon: Icons.vaccines,
-            iconColor: Colors.blue,
+            iconColor: Colors.blueAccent,
             label: 'Инсулин',
             field: TextField(
               controller: _insulinController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-              ],
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
               decoration: const InputDecoration(
                 hintText: '0',
                 suffixText: 'ед',
                 isDense: true,
                 border: OutlineInputBorder(),
+                focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.green)),
               ),
             ),
           ),
@@ -394,7 +394,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           // Строка 4: Заметки
           _buildFormRow(
             icon: Icons.edit_note,
-            iconColor: Colors.blueGrey,
+            iconColor: Colors.grey.shade600,
             label: 'Заметки',
             field: TextField(
               controller: _noteController,
@@ -403,6 +403,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 hintText: 'Дополнительные сведения...',
                 isDense: true,
                 border: OutlineInputBorder(),
+                focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.green)),
               ),
             ),
           ),
@@ -420,7 +421,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blueAccent,
+                backgroundColor: Colors.green, // Зеленая кнопка
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -467,9 +468,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 }
 
-// ============================================================
-// ВИДЖЕТ: Основная кнопка приёма пищи
-// ============================================================
 class _MainMealButton extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -523,9 +521,6 @@ class _MainMealButton extends StatelessWidget {
   }
 }
 
-// ============================================================
-// ВИДЖЕТ: Кнопка перекуса
-// ============================================================
 class _SnackButton extends StatelessWidget {
   final String label;
   final IconData icon;
