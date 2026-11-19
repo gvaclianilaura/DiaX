@@ -8,6 +8,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:diax/db/database_helper.dart';
 import 'package:diax/models/saved_calculation.dart';
 import 'package:diax/screens/saved_calculations_screen.dart';
+import 'package:diax/services/api_service.dart';
+import 'package:diax/services/auth_service.dart';
 
 class CalculatorScreen extends StatefulWidget {
   const CalculatorScreen({super.key});
@@ -117,22 +119,54 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     final weight = _parseDouble(_weightController.text);
     if (carbsPer100 == null || weight == null) return;
 
-    final calc = SavedCalculation(
-      createdAt: DateTime.now().toIso8601String(),
+    final userId = await AuthService.getUserId();
+    if (userId == null) {
+      _showSnack('Пожалуйста, войдите в аккаунт', color: Colors.redAccent);
+      return;
+    }
+
+    // 1. Отправляем фото в Cloud.ru (если оно есть)
+    String? finalImageUrl;
+    if (_photoFile != null) {
+      _showSnack('Сохраняем данные и загружаем фото...', color: Colors.blueGrey);
+      finalImageUrl = await ApiService.uploadPhoto(_photoFile!);
+      if (finalImageUrl == null && mounted) {
+        _showSnack('Не удалось загрузить фото, сохраняем без него', color: Colors.orange.shade400);
+      }
+    }
+
+    // 2. Отправляем данные на сервер с прикрепленной ссылкой на фото
+    final serverSuccess = await ApiService.saveRecord(
+      userId: userId, 
       productName: _productNameController.text.trim(),
       carbsPer100: carbsPer100,
       weight: weight,
       breadUnits: _resultBreadUnits!,
       carbsInPortion: _resultCarbsInPortion!,
-      photoPath: _photoFile?.path,
+      imageUrl: finalImageUrl, // Передаем ссылку из облака (или null)
     );
 
-    await DatabaseHelper.instance.saveCalculation(calc);
+    if (serverSuccess) {
+      // 3. Сохраняем в локальную БД
+      final calc = SavedCalculation(
+        createdAt: DateTime.now().toIso8601String(),
+        productName: _productNameController.text.trim(),
+        carbsPer100: carbsPer100,
+        weight: weight,
+        breadUnits: _resultBreadUnits!,
+        carbsInPortion: _resultCarbsInPortion!,
+        photoPath: finalImageUrl ?? _photoFile?.path, // Облачная ссылка в приоритете
+      );
 
-    if (!mounted) return;
-    _showSnack('Результат сохранён', color: const Color(0xFF2E7D32));
+      await DatabaseHelper.instance.saveCalculation(calc);
 
-    _clear();
+      if (!mounted) return;
+      _showSnack('Успешно сохранено в облако!', color: const Color(0xFF2E7D32));
+      _clear();
+    } else {
+      if (!mounted) return;
+      _showSnack('Ошибка связи с сервером', color: Colors.redAccent);
+    }
   }
 
   void _clear() {
@@ -161,7 +195,6 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Очень легкий серый оттенок фона, чтобы белые карточки казались объемными
     return Scaffold(
       backgroundColor: const Color(0xFFF7F9F7), 
       appBar: AppBar(
@@ -170,8 +203,8 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
           style: TextStyle(fontWeight: FontWeight.w700, letterSpacing: -0.5),
         ),
         centerTitle: true,
-        backgroundColor: Colors.transparent, // Воздушная шапка
-        foregroundColor: const Color(0xFF1B4332), // Глубокий темно-зеленый
+        backgroundColor: Colors.transparent,
+        foregroundColor: const Color(0xFF1B4332),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.format_list_bulleted_rounded),
@@ -279,7 +312,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
             ElevatedButton(
               onPressed: _calculate,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2E7D32), // Изумрудный
+                backgroundColor: const Color(0xFF2E7D32),
                 foregroundColor: Colors.white,
                 elevation: 4,
                 shadowColor: const Color(0xFF2E7D32).withValues(alpha: 0.4),
@@ -327,7 +360,6 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     );
   }
 
-  // Виджет кастомного поля ввода с мягкими тенями
   Widget _buildModernTextField({
     required TextEditingController controller,
     required String label,
@@ -375,7 +407,6 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     );
   }
 
-  // Премиальная карточка результата с водяным знаком
   Widget _buildResultCard() {
     return Container(
       clipBehavior: Clip.hardEdge,
@@ -396,7 +427,6 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       ),
       child: Stack(
         children: [
-          // Водяной знак на фоне
           Positioned(
             right: -20,
             bottom: -20,
@@ -409,7 +439,6 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
               ),
             ),
           ),
-          // Основной контент
           Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
@@ -562,6 +591,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     if (value == value.roundToDouble()) return value.toInt().toString();
     return value.toString();
   }
+
   void _resetResultIfNeeded() {
     if (_resultBreadUnits != null) {
       setState(() {

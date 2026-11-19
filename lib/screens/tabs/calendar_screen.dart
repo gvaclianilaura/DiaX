@@ -3,8 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:table_calendar/table_calendar.dart';
 
-import 'package:diax/db/database_helper.dart';
-import 'package:diax/models/meal_entry.dart';
+import 'package:diax/models/calendar_event.dart';
+import 'package:diax/services/api_service.dart';
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -19,6 +19,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   String? _selectedMeal;
   String _glucoseUnit = 'mmol'; // По умолчанию
+  int? _userId; // ID текущего пользователя из SharedPreferences
 
   final TextEditingController _glucoseController = TextEditingController();
   final TextEditingController _breadUnitsController = TextEditingController();
@@ -30,7 +31,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSettingsAndData(); // Сразу при открытии экрана грузим и настройки, и галочки
+    _loadSettingsAndData(); // Грузим настройки и события с сервера при старте
   }
 
   @override
@@ -42,26 +43,45 @@ class _CalendarScreenState extends State<CalendarScreen> {
     super.dispose();
   }
 
+  // === Загрузка настроек, ID пользователя и событий с сервера ===
+  Future<void> _loadSettingsAndData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedUnit = prefs.getString('glucose_unit') ?? 'mmol';
+    
+    // Получаем ID залогиненного пользователя (сохраняется при логине/регистрации)
+    // Если у тебя ID хранится под другим ключом, поправь здесь:
+    final userId = prefs.getInt('user_id') ?? 1; 
+
+    setState(() {
+      _glucoseUnit = savedUnit;
+      _userId = userId;
+    });
+
+    // Получаем события календаря с бэкенда FastAPI
+    final events = await ApiService.getCalendarEvents(userId);
+
+    // Фильтруем события, которые привязаны именно к выбранной дате
+    final selectedDateStr = _dateKey(_selectedDay);
+    final filled = <String>{};
+
+    for (var event in events) {
+      // Сравниваем даты начала события с выбранным днем
+      final eventDateStr = _dateKey(event.startTime);
+      if (eventDateStr == selectedDateStr) {
+        filled.add(event.title);
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _filledKeys = filled;
+    });
+  }
+
   String _dateKey(DateTime date) {
     return '${date.year.toString().padLeft(4, '0')}-'
         '${date.month.toString().padLeft(2, '0')}-'
         '${date.day.toString().padLeft(2, '0')}';
-  }
-
-  // === Единая функция загрузки при старте и смене дня ===
-  Future<void> _loadSettingsAndData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedUnit = prefs.getString('glucose_unit') ?? 'mmol';
-
-    final entries = await DatabaseHelper.instance.getMealEntriesForDate(
-      _dateKey(_selectedDay),
-    );
-
-    if (!mounted) return;
-    setState(() {
-      _glucoseUnit = savedUnit; // Обновляем единицу измерения!
-      _filledKeys = entries.map((e) => e.mealName).toSet();
-    });
   }
 
   @override
@@ -193,7 +213,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     _MainMealButton(
                       label: 'Ужин',
                       icon: Icons.dinner_dining,
-                      color: Colors.teal, // Заменили фиолетовый на бирюзовый (в тему)
+                      color: Colors.teal, // Бирюзовый
                       isFilled: _filledKeys.contains('Ужин'),
                       onTap: () => _openMealForm('Ужин'),
                     ),
@@ -217,24 +237,52 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   Future<void> _openMealForm(String mealName) async {
-    // Еще раз проверяем настройки прямо перед открытием формы на всякий случай
     final prefs = await SharedPreferences.getInstance();
     final savedUnit = prefs.getString('glucose_unit') ?? 'mmol';
+    final userId = _userId ?? 1;
 
-    final existing = await DatabaseHelper.instance.getMealEntry(
-      _dateKey(_selectedDay),
-      mealName,
-    );
+    // Ищем существующее событие с бэкенда для этого приема пищи на этот день
+    final events = await ApiService.getCalendarEvents(userId);
+    final selectedDateStr = _dateKey(_selectedDay);
+
+    CalendarEvent? existing;
+    for (var event in events) {
+      if (_dateKey(event.startTime) == selectedDateStr && event.title == mealName) {
+        existing = event;
+        break;
+      }
+    }
+
+    // Парсим описание, если оно сохранялось в формате "Глюкоза: X | ХЕ: Y | Инсулин: Z | Заметка"
+    String glucoseVal = '';
+    String breadVal = '';
+    String insulinVal = '';
+    String noteVal = '';
+
+    if (existing?.description != null && existing!.description!.isNotEmpty) {
+      final parts = existing.description!.split(' | ');
+      for (var part in parts) {
+        if (part.startsWith('Глюкоза:')) {
+          glucoseVal = part.replaceFirst('Глюкоза:', '').trim();
+        } else if (part.startsWith('ХЕ:')) {
+          breadVal = part.replaceFirst('ХЕ:', '').trim();
+        } else if (part.startsWith('Инсулин:')) {
+          insulinVal = part.replaceFirst('Инсулин:', '').trim();
+        } else if (part.startsWith('Заметка:')) {
+          noteVal = part.replaceFirst('Заметка:', '').trim();
+        }
+      }
+    }
 
     if (!mounted) return;
 
     setState(() {
       _glucoseUnit = savedUnit;
       _selectedMeal = mealName;
-      _glucoseController.text = existing?.glucose?.toString() ?? '';
-      _breadUnitsController.text = existing?.breadUnits?.toString() ?? '';
-      _insulinController.text = existing?.insulin?.toString() ?? '';
-      _noteController.text = existing?.note ?? '';
+      _glucoseController.text = glucoseVal;
+      _breadUnitsController.text = breadVal;
+      _insulinController.text = insulinVal;
+      _noteController.text = noteVal;
     });
   }
 
@@ -244,57 +292,68 @@ class _CalendarScreenState extends State<CalendarScreen> {
     });
   }
 
+  // === Сохранение данных на бэкенд FastAPI через ApiService ===
   Future<void> _saveMealEntry() async {
     final mealName = _selectedMeal;
     if (mealName == null) return;
 
-    final glucose = _parseDouble(_glucoseController.text);
-    final breadUnits = _parseDouble(_breadUnitsController.text);
-    final insulin = _parseDouble(_insulinController.text);
+    final userId = _userId ?? 1;
+    final glucose = _glucoseController.text.trim();
+    final breadUnits = _breadUnitsController.text.trim();
+    final insulin = _insulinController.text.trim();
     final note = _noteController.text.trim();
 
-    final entry = MealEntry(
-      date: _dateKey(_selectedDay),
-      mealName: mealName,
-      glucose: glucose,
-      breadUnits: breadUnits,
-      insulin: insulin,
-      note: note,
+    // Собираем описание в читаемый вид для бэкенда
+    final description = 'Глюкоза: $glucose | ХЕ: $breadUnits | Инсулин: $insulin | Заметка: $note';
+
+    // Формируем точное время начала и окончания события на выбранный день
+    final startTime = DateTime(
+      _selectedDay.year,
+      _selectedDay.month,
+      _selectedDay.day,
+      12, 0, 0, // Можно зафиксировать время или сделать текущее
+    );
+    final endTime = startTime.add(const Duration(hours: 1));
+
+    final event = CalendarEvent(
+      userId: userId,
+      title: mealName,
+      description: description,
+      startTime: startTime,
+      endTime: endTime,
     );
 
-    if (entry.isEmpty) {
-      await DatabaseHelper.instance.deleteMealEntry(entry.date, entry.mealName);
-    } else {
-      await DatabaseHelper.instance.saveMealEntry(entry);
-    }
-
-    await _loadSettingsAndData();
+    // Отправляем на сервер
+    bool success = await ApiService.createCalendarEvent(event);
 
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          entry.isEmpty
-              ? 'Запись удалена'
-              : 'Сохранено: $mealName\n'
-                  'Глюкоза: ${_glucoseController.text} '
-                  '${_glucoseUnit == 'mmol' ? 'ммоль/л' : 'мг/дл'}\n'
-                  'ХЕ: ${_breadUnitsController.text}\n'
-                  'Инсулин: ${_insulinController.text} ед\n'
-                  'Заметка: $note',
+    if (success) {
+      await _loadSettingsAndData(); // Обновляем галочки на экране
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Сохранено в облако: $mealName\n'
+            'Глюкоза: $glucose ${_glucoseUnit == 'mmol' ? 'ммоль/л' : 'мг/дл'}\n'
+            'ХЕ: $breadUnits\n'
+            'Инсулин: $insulin ед\n'
+            'Заметка: $note',
+          ),
+          duration: const Duration(seconds: 3),
+          backgroundColor: Colors.green.shade700,
         ),
-        duration: const Duration(seconds: 3),
-        backgroundColor: Colors.green.shade700, // Зеленый снэкбар
-      ),
-    );
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ошибка сохранения на сервер!'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
 
     _closeMealForm();
-  }
-
-  double? _parseDouble(String text) {
-    if (text.trim().isEmpty) return null;
-    return double.tryParse(text.replaceAll(',', '.'));
   }
 
   Widget _buildMealForm() {

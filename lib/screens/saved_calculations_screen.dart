@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 
 import 'package:diax/db/database_helper.dart';
 import 'package:diax/models/saved_calculation.dart';
+import 'package:diax/services/api_service.dart';
+import 'package:diax/services/auth_service.dart';
 
 class SavedCalculationsScreen extends StatefulWidget {
   const SavedCalculationsScreen({super.key});
@@ -13,7 +15,7 @@ class SavedCalculationsScreen extends StatefulWidget {
 
 class _SavedCalculationsScreenState extends State<SavedCalculationsScreen> {
   List<SavedCalculation> _allCalculations = [];
-  List<SavedCalculation> _filteredCalculations = []; // Список для отображения
+  List<SavedCalculation> _filteredCalculations = [];
   bool _isLoading = true;
   
   final TextEditingController _searchController = TextEditingController();
@@ -31,16 +33,28 @@ class _SavedCalculationsScreenState extends State<SavedCalculationsScreen> {
   }
 
   Future<void> _loadData() async {
-    final data = await DatabaseHelper.instance.getAllCalculations();
+    setState(() => _isLoading = true);
+
+    final userId = await AuthService.getUserId();
+    
+    // Если юзер не авторизован
+    if (userId == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return; 
+    }
+
+    // Запрашиваем данные с сервера Onreza
+    final serverData = await ApiService.getUserRecords(userId);
+
     if (!mounted) return;
+    
     setState(() {
-      _allCalculations = data;
-      _filteredCalculations = data; // Изначально показываем всё
+      _allCalculations = serverData; 
+      _filteredCalculations = serverData; 
       _isLoading = false;
     });
   }
 
-  // Метод живого поиска
   void _filterList(String query) {
     if (query.isEmpty) {
       setState(() => _filteredCalculations = _allCalculations);
@@ -57,10 +71,28 @@ class _SavedCalculationsScreenState extends State<SavedCalculationsScreen> {
 
   Future<void> _deleteItem(SavedCalculation item) async {
     if (item.id != null) {
+      // 1. Отправляем команду на удаление в Onreza
+      final serverSuccess = await ApiService.deleteRecord(item.id!);
+      
+      if (!serverSuccess) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Ошибка удаления из облака', style: TextStyle(color: Colors.white)), 
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+          _loadData(); 
+        }
+        return; 
+      }
+
+      // 2. Удаляем из локальной БД
       await DatabaseHelper.instance.deleteCalculation(item.id!);
     }
     
-    if (item.photoPath != null) {
+    // 3. Удаляем локальное фото (ТОЛЬКО если это не ссылка на облако Cloud.ru)
+    if (item.photoPath != null && !item.photoPath!.startsWith('http')) {
       try {
         final file = File(item.photoPath!);
         if (await file.exists()) {
@@ -69,7 +101,7 @@ class _SavedCalculationsScreenState extends State<SavedCalculationsScreen> {
       } catch (_) {}
     }
     
-    // Удаляем из обоих списков, чтобы интерфейс не сломался
+    // 4. Убираем из интерфейса
     setState(() {
       _allCalculations.remove(item);
       _filteredCalculations.remove(item);
@@ -90,12 +122,11 @@ class _SavedCalculationsScreenState extends State<SavedCalculationsScreen> {
           ? const Center(child: CircularProgressIndicator(color: Colors.green))
           : Column(
               children: [
-                // Поисковая строка
                 Padding(
                   padding: const EdgeInsets.all(12.0),
                   child: TextField(
                     controller: _searchController,
-                    onChanged: _filterList, // Запускает фильтрацию при каждом нажатии клавиши
+                    onChanged: _filterList,
                     decoration: InputDecoration(
                       hintText: 'Поиск продукта...',
                       prefixIcon: const Icon(Icons.search, color: Colors.green),
@@ -118,8 +149,6 @@ class _SavedCalculationsScreenState extends State<SavedCalculationsScreen> {
                     ),
                   ),
                 ),
-                
-                // Сам список продуктов
                 Expanded(
                   child: _filteredCalculations.isEmpty
                       ? _buildEmptyState()
@@ -149,6 +178,63 @@ class _SavedCalculationsScreenState extends State<SavedCalculationsScreen> {
             style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
           ),
         ],
+      ),
+    );
+  }
+
+  // Вспомогательный виджет для отрисовки картинки (облако или локальная)
+  Widget _buildProductImage(String? path) {
+    if (path == null || path.isEmpty) {
+      return Container(
+        width: 60,
+        height: 60,
+        color: Colors.green.shade50,
+        child: Icon(Icons.restaurant, color: Colors.green.shade300),
+      );
+    }
+
+    // Если это ссылка из Cloud.ru
+    if (path.startsWith('http')) {
+      return Image.network(
+        path,
+        width: 60,
+        height: 60,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            width: 60,
+            height: 60,
+            color: Colors.green.shade50,
+            child: const Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green),
+              ),
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) => Container(
+          width: 60,
+          height: 60,
+          color: Colors.red.shade50,
+          child: const Icon(Icons.broken_image, color: Colors.redAccent),
+        ),
+      );
+    }
+
+    // Если это старый локальный путь
+    return Image.file(
+      File(path),
+      width: 60,
+      height: 60,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) => Container(
+        width: 60,
+        height: 60,
+        color: Colors.red.shade50,
+        child: const Icon(Icons.broken_image, color: Colors.redAccent),
       ),
     );
   }
@@ -191,19 +277,7 @@ class _SavedCalculationsScreenState extends State<SavedCalculationsScreen> {
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: item.photoPath != null
-                    ? Image.file(
-                        File(item.photoPath!),
-                        width: 60,
-                        height: 60,
-                        fit: BoxFit.cover,
-                      )
-                    : Container(
-                        width: 60,
-                        height: 60,
-                        color: Colors.green.shade50,
-                        child: Icon(Icons.restaurant, color: Colors.green.shade300),
-                      ),
+                child: _buildProductImage(item.photoPath), // Используем новый метод
               ),
               const SizedBox(width: 12),
               Expanded(

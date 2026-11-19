@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:diax/db/database_helper.dart';
 import 'package:diax/services/auth_service.dart';
-import 'package:diax/screens/main/main_screen.dart'; // Убедись, что путь правильный
+import 'package:diax/screens/main/main_screen.dart';
+import 'package:diax/services/api_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -44,48 +45,48 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // Общий метод для Входа и Регистрации
+// Общий метод для Входа и Регистрации через сервер Onreza
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
-    final login = _loginController.text.trim();
+    // Сервер ждет поле "email", но мы можем передавать туда и обычный логин
+    final login = _loginController.text.trim(); 
     final password = _passwordController.text;
 
-    bool ok = false;
+    int? userId; // Сюда сервер вернет ID в случае успеха
 
     // Проверяем, какой сейчас режим
     if (_isLoginMode) {
-      // ПЫТАЕМСЯ ВОЙТИ
-      ok = await DatabaseHelper.instance.checkUser(login, password);
+      // ПЫТАЕМСЯ ВОЙТИ (отправляем запрос на сервер)
+      userId = await ApiService.login(login, password);
     } else {
-      // РЕГИСТРИРУЕМСЯ
-      ok = await DatabaseHelper.instance.registerUser(login, password);
+      // РЕГИСТРИРУЕМСЯ (отправляем запрос на сервер)
+      userId = await ApiService.register(login, password);
     }
 
-    // Проверка после первого await
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    if (ok) {
-      await AuthService.login(); // Запоминаем статус
+    // Если сервер вернул ID, значит всё прошло успешно!
+    if (userId != null) {
+      // Запоминаем ID в памяти телефона, чтобы не логиниться каждый раз
+      await AuthService.login(userId); 
 
-      // Проверка после второго await
       if (!mounted) return;
 
       _showSnack(_isLoginMode ? 'Вход выполнен!' : 'Регистрация успешна!');
 
-      // Проверка перед навигацией
-      if (!mounted) return;
-
+      // Переходим на главный экран
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const MainScreen()),
       );
     } else {
+      // Если сервер вернул null (ошибка входа или логин занят)
       _showSnack(
-        _isLoginMode ? 'Неверный логин или пароль' : 'Такой логин уже существует',
+        _isLoginMode ? 'Неверный логин или пароль' : 'Ошибка (возможно, такой логин уже есть)',
         isError: true,
       );
     }
